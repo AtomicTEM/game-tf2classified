@@ -1,4 +1,4 @@
-# Vortex Extension for Starfield
+# Vortex Extension for Team Fortress 2 Classified
 
 This is an extension for [Vortex](https://www.nexusmods.com/about/vortex/) to add support for Starfield. This is available for the PC on [Xbox & Game Pass](https://www.xbox.com/en-GB/games/starfield) and [Steam](https://store.steampowered.com/app/1716740/Starfield/).
 
