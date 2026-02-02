@@ -126,6 +126,9 @@ function validateLoadOrder(prev, current) {
       id: entry.id,
       reason: 'Load order entries must reference .vpk archives.',
     }));
+  if (invalid.length === 0) {
+    return Promise.resolve(undefined);
+  }
   return Promise.resolve({ invalid });
 }
 function testSupportedContent(files, gameId) {
