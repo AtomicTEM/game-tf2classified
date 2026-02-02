@@ -9,8 +9,8 @@ const CUSTOM_FOLDER = path.join('tf2classified', 'custom');
 const GAMEINFO_FILE = path.join('tf2classified', 'gameinfo.txt');
 
 const INFO_FILE = path.join('tf2classified', 'steam.inf');
-const CUSTOM_VPK_LINE = /^\s*"game\+mod\+custom_mod"\s+"[^"]*custom\/[^"]+\.vpk"\s*$/i;
-const CUSTOM_WILDCARD_LINE = /"game\+mod\+custom_mod"\s+"[^"]*custom\/\*"\s*$/i;
+const CUSTOM_VPK_LINE = /^\s*"?game\+mod\+custom_mod"?\s+"?[^"]*custom\/[^"]+\.vpk"?\s*$/i;
+const CUSTOM_WILDCARD_LINE = /"?game\+mod\+custom_mod"?\s+"?[^"]*custom\/\*"?\s*$/i;
 
 function findGame() {
   return util.steam.findByAppId(STEAM_ID.toString())
@@ -66,7 +66,7 @@ function parseGameInfoLoadOrder(contents) {
     .split(/\r?\n/)
     .filter(line => CUSTOM_VPK_LINE.test(line))
     .map(line => {
-      const match = line.match(/custom\/([^"]+\.vpk)"/i);
+      const match = line.match(/custom\/([^"]+\.vpk)/i);
       return match?.[1];
     })
     .filter(Boolean);
@@ -81,7 +81,7 @@ function updateGameInfoLoadOrder(contents, orderedVpks) {
   const indentMatch = wildcardIndex >= 0 ? filteredLines[wildcardIndex].match(/^(\s*)/) : null;
   const indent = indentMatch?.[1] ?? '\t\t';
   const newLines = orderedVpks.map(vpk => (
-    `${indent}"game+mod+custom_mod"\t"|gameinfo_path|custom/${normalizeVpkName(vpk)}"`
+    `${indent}game+mod+custom_mod\t|gameinfo_path|custom/${normalizeVpkName(vpk)}`
   ));
   filteredLines.splice(insertIndex, 0, ...newLines);
   return filteredLines.join(lineBreak);
