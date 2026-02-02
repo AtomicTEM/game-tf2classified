@@ -9,8 +9,8 @@ const CUSTOM_FOLDER = path.join('tf2classified', 'custom');
 const GAMEINFO_FILE = path.join('tf2classified', 'gameinfo.txt');
 
 const INFO_FILE = path.join('tf2classified', 'steam.inf');
-const CUSTOM_VPK_LINE = /^\s*"game\+mod\+custom_mod"\s*"\|gameinfo_path\|custom\/[^"]+\.vpk"\s*$/i;
-const CUSTOM_WILDCARD_LINE = /^\s*"game\+mod\+custom_mod"\s*"\|gameinfo_path\|custom\/\*"\s*$/i;
+const CUSTOM_VPK_LINE = /^\s*"?game\+mod\+custom_mod"?\s+"?[^"]*custom\/[^"]+\.vpk"?\s*$/i;
+const CUSTOM_WILDCARD_LINE = /"?game\+mod\+custom_mod"?\s+"?[^"]*custom\/\*"?\s*$/i;
 
 function findGame() {
   return util.steam.findByAppId(STEAM_ID.toString())
@@ -66,13 +66,14 @@ function parseGameInfoLoadOrder(contents) {
     .split(/\r?\n/)
     .filter(line => CUSTOM_VPK_LINE.test(line))
     .map(line => {
-      const match = line.match(/\|gameinfo_path\|custom\/([^"]+\.vpk)"/i);
+      const match = line.match(/custom\/([^"]+\.vpk)/i);
       return match?.[1];
     })
     .filter(Boolean);
 }
 
 function updateGameInfoLoadOrder(contents, orderedVpks) {
+  const lineBreak = contents.includes('\r\n') ? '\r\n' : '\n';
   const lines = contents.split(/\r?\n/);
   const filteredLines = lines.filter(line => !CUSTOM_VPK_LINE.test(line));
   const wildcardIndex = filteredLines.findIndex(line => CUSTOM_WILDCARD_LINE.test(line));
@@ -83,7 +84,7 @@ function updateGameInfoLoadOrder(contents, orderedVpks) {
     `${indent}"game+mod+custom_mod"\t"|gameinfo_path|custom/${normalizeVpkName(vpk)}"`
   ));
   filteredLines.splice(insertIndex, 0, ...newLines);
-  return filteredLines.join('\n');
+  return filteredLines.join(lineBreak);
 }
 
 function serializeLoadOrder(loadOrder) {
