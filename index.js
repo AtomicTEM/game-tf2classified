@@ -81,7 +81,7 @@ function updateGameInfoLoadOrder(contents, orderedVpks) {
   const indentMatch = wildcardIndex >= 0 ? filteredLines[wildcardIndex].match(/^(\s*)/) : null;
   const indent = indentMatch?.[1] ?? '\t\t';
   const newLines = orderedVpks.map(vpk => (
-    `${indent}game+mod+custom_mod\t|gameinfo_path|custom/${normalizeVpkName(vpk)}`
+    `${indent}"game+mod+custom_mod"\t"|gameinfo_path|custom/${normalizeVpkName(vpk)}"`
   ));
   filteredLines.splice(insertIndex, 0, ...newLines);
   return filteredLines.join(lineBreak);
