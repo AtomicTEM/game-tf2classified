@@ -5,8 +5,12 @@ const path = require('path');
 const MOD_FILE_EXT = ".vpk";
 const STEAM_ID = 3545060;
 const GAME_ID = 'teamfortress2classified';
+const CUSTOM_FOLDER = path.join('tf2classified', 'custom');
+const GAMEINFO_FILE = path.join('tf2classified', 'gameinfo.txt');
 
 const INFO_FILE = path.join('tf2classified', 'steam.inf');
+const CUSTOM_VPK_LINE = /^\s*"game\+mod\+custom_mod"\s+"[^"]*custom\/[^"]+\.vpk"\s*$/i;
+const CUSTOM_WILDCARD_LINE = /"game\+mod\+custom_mod"\s+"[^"]*custom\/\*"\s*$/i;
 
 function findGame() {
   return util.steam.findByAppId(STEAM_ID.toString())
@@ -45,6 +49,86 @@ function installContent(files) {
 
   return Promise.resolve({ instructions });
 }
+
+function normalizeVpkName(fileName) {
+  return fileName.replace(/\\/g, '/');
+}
+
+function getCustomVpkEntries(gamePath) {
+  const customPath = path.join(gamePath, CUSTOM_FOLDER);
+  return fs.readdirAsync(customPath)
+    .then(files => files.filter(file => path.extname(file).toLowerCase() === MOD_FILE_EXT))
+    .catch(() => []);
+}
+
+function parseGameInfoLoadOrder(contents) {
+  return contents
+    .split(/\r?\n/)
+    .filter(line => CUSTOM_VPK_LINE.test(line))
+    .map(line => {
+      const match = line.match(/custom\/([^"]+\.vpk)"/i);
+      return match?.[1];
+    })
+    .filter(Boolean);
+}
+
+function updateGameInfoLoadOrder(contents, orderedVpks) {
+  const lineBreak = contents.includes('\r\n') ? '\r\n' : '\n';
+  const lines = contents.split(/\r?\n/);
+  const filteredLines = lines.filter(line => !CUSTOM_VPK_LINE.test(line));
+  const wildcardIndex = filteredLines.findIndex(line => CUSTOM_WILDCARD_LINE.test(line));
+  const insertIndex = wildcardIndex >= 0 ? wildcardIndex : filteredLines.length;
+  const indentMatch = wildcardIndex >= 0 ? filteredLines[wildcardIndex].match(/^(\s*)/) : null;
+  const indent = indentMatch?.[1] ?? '\t\t';
+  const newLines = orderedVpks.map(vpk => (
+    `${indent}"game+mod+custom_mod"\t"|gameinfo_path|custom/${normalizeVpkName(vpk)}"`
+  ));
+  filteredLines.splice(insertIndex, 0, ...newLines);
+  return filteredLines.join(lineBreak);
+}
+
+function serializeLoadOrder(loadOrder) {
+  return findGame()
+    .then(gamePath => {
+      const ordered = loadOrder.filter(entry => entry.enabled)
+        .map(entry => entry.id);
+      const gameInfoPath = path.join(gamePath, GAMEINFO_FILE);
+      return fs.readFileAsync(gameInfoPath, { encoding: 'utf8' })
+        .then(contents => updateGameInfoLoadOrder(contents, ordered))
+        .then(updated => fs.writeFileAsync(gameInfoPath, updated, { encoding: 'utf8' }));
+    });
+}
+
+function deserializeLoadOrder() {
+  return findGame()
+    .then(gamePath => {
+      const gameInfoPath = path.join(gamePath, GAMEINFO_FILE);
+      return fs.readFileAsync(gameInfoPath, { encoding: 'utf8' })
+        .then(contents => {
+          const orderedFromFile = parseGameInfoLoadOrder(contents);
+          return getCustomVpkEntries(gamePath)
+            .then(currentVpks => {
+              const remaining = currentVpks.filter(file => !orderedFromFile.includes(file));
+              const combined = [...orderedFromFile, ...remaining];
+              return combined.map(file => ({
+                id: file,
+                name: file,
+                enabled: true,
+              }));
+            });
+        });
+    });
+}
+
+function validateLoadOrder(prev, current) {
+  const invalid = current
+    .filter(entry => path.extname(entry.id).toLowerCase() !== MOD_FILE_EXT)
+    .map(entry => ({
+      id: entry.id,
+      reason: 'Load order entries must reference .vpk archives.',
+    }));
+  return Promise.resolve({ invalid });
+}
 function testSupportedContent(files, gameId) {
  
   let supported = (gameId === GAME_ID ) &&
@@ -79,13 +163,13 @@ function main(context) {
     mergeMods: true,
     queryPath: findGame,
     supportedTools: tools,
-    queryModPath: () => path.join('tf2classified', 'custom'),
+    queryModPath: () => CUSTOM_FOLDER,
     getGameVersion,
     logo: 'gameart.jpg',
     executable: () => 'tf2classified_win64.exe',
     requiredFiles: [
       'tf2classified_win64.exe',
-      path.join('tf2classified', 'gameinfo.txt'),
+      GAMEINFO_FILE,
     ],
     environment: {
       SteamAPPId: STEAM_ID.toString(),
@@ -94,6 +178,14 @@ function main(context) {
       steamAppId: STEAM_ID,
       nexusPageId: GAME_ID,
     }
+  });
+
+  context.registerLoadOrder({
+    gameId: GAME_ID,
+    usageInstructions: 'Arrange the .vpk archives in the order they should be loaded. Entries are written into gameinfo.txt as custom search paths above the custom/* wildcard entry.',
+    serializeLoadOrder: (loadOrder) => serializeLoadOrder(loadOrder),
+    deserializeLoadOrder: () => deserializeLoadOrder(),
+    validate: (prev, current) => validateLoadOrder(prev, current),
   });
   
   context.registerInstaller('teamfortress2classified-mod', 25, testSupportedContent, installContent);
